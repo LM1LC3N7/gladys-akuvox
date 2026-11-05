@@ -1,177 +1,395 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Akuvox",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Akuvox door phones and access controls, locally: relays, door and call events.",
+    "fr": "Interphones et contrôles d'accès Akuvox, en local : relais, ouvertures et appels."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-akuvox:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-akuvox/main/cover.png",
+  "categories": ["security"],
+  "transports": ["local"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your Akuvox devices",
+        "fr": "Vos appareils Akuvox"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "For Akuvox door phones and access controllers (E, R, X and A series) on your network, through their local HTTP API, without the Akuvox cloud: the state of the door relays, an opening button per relay (off by default), and scene triggers for the door log (opened, access denied) and the call log. Enable the HTTP API in the web page of each device first (see the guide). Never tested with a real device. Unofficial, not affiliated with Akuvox.",
+        "fr": "Pour les interphones et contrôles d'accès Akuvox (séries E, R, X et A) de votre réseau, par leur API HTTP locale, sans le cloud Akuvox : l'état des relais de porte, un bouton d'ouverture par relais (désactivé par défaut), et des déclencheurs de scène pour le journal des portes (ouverture, accès refusé) et celui des appels. Activez d'abord l'API HTTP dans la page web de chaque appareil (voir le guide). Jamais testé avec un vrai appareil. Non officiel, sans lien avec Akuvox."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-akuvox/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-akuvox/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "hosts",
+      "type": "string",
+      "label": {
+        "en": "Addresses of the devices",
+        "fr": "Adresses des appareils"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "The IP address of each device, separated by commas (8 at most), with \":port\" if its web page is not on port 80. Give each device a fixed address in your router.",
+        "fr": "L'adresse IP de chaque appareil, séparées par des virgules (8 au plus), avec « :port » si sa page web n'est pas sur le port 80. Donnez à chaque appareil une adresse fixe dans votre box."
+      },
+      "placeholder": {
+        "en": "192.168.1.50, 192.168.1.51",
+        "fr": "192.168.1.50, 192.168.1.51"
+      },
+      "required": true
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
+      "key": "auth",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "label": {
+        "en": "Authentication of the HTTP API",
+        "fr": "Authentification de l'API HTTP"
+      },
+      "description": {
+        "en": "As set in the HTTP API page of the devices. Digest never sends the password over the network; Basic sends it in clear on your local network at every request; None (or an allowlist of addresses on the device) sends nothing.",
+        "fr": "Comme réglée dans la page API HTTP des appareils. Digest n'envoie jamais le mot de passe sur le réseau ; Basic l'envoie en clair sur votre réseau local à chaque requête ; Aucune (ou une liste d'adresses autorisées sur l'appareil) n'envoie rien."
+      },
       "required": false,
-      "default": "celsius",
+      "default": "digest",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "digest",
+          "label": {
+            "en": "Digest (recommended)",
+            "fr": "Digest (conseillé)"
+          }
+        },
+        {
+          "value": "basic",
+          "label": {
+            "en": "Basic",
+            "fr": "Basic"
+          }
+        },
+        {
+          "value": "none",
+          "label": {
+            "en": "None or allowlist",
+            "fr": "Aucune ou liste d'adresses"
+          }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "key": "username",
+      "type": "string",
+      "label": {
+        "en": "User of the HTTP API",
+        "fr": "Utilisateur de l'API HTTP"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "The same on every device listed above.",
+        "fr": "Le même sur tous les appareils listés ci-dessus."
+      },
+      "placeholder": {
+        "en": "gladys",
+        "fr": "gladys"
+      },
+      "required": false
+    },
+    {
+      "key": "password",
+      "type": "secret",
+      "label": {
+        "en": "Password of the HTTP API",
+        "fr": "Mot de passe de l'API HTTP"
+      },
+      "description": {
+        "en": "Kept by Gladys in its database, never shown again, sent only to the devices listed above (with Digest, only a proof of it travels). A device that refuses it is not asked again until you change it or click \"Test the connection\".",
+        "fr": "Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement aux appareils listés ci-dessus (avec Digest, seule une preuve en circule). Un appareil qui le refuse n'est plus sollicité tant que vous ne le changez pas ou ne cliquez pas sur « Tester la connexion »."
+      },
+      "required": false
+    },
+    {
+      "key": "poll_interval",
+      "type": "number",
+      "label": {
+        "en": "Reading interval (seconds)",
+        "fr": "Intervalle de lecture (secondes)"
+      },
+      "description": {
+        "en": "How often the relays and the logs are read (5 to 300). The devices push nothing: a door opened or a call shows within this time.",
+        "fr": "Tous les combien les relais et les journaux sont lus (5 à 300). Les appareils n'envoient rien d'eux-mêmes : une ouverture ou un appel apparaît dans ce délai."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": 10,
+      "min": 5,
+      "max": 300
+    },
+    {
+      "key": "safety",
+      "type": "section",
+      "label": {
+        "en": "Opening the doors",
+        "fr": "Ouverture des portes"
+      },
+      "description": {
+        "en": "Anyone who can control the devices in Gladys (dashboard, scenes, the Gladys app) can open the doors once this is allowed: allow it only if your Gladys is well protected. An opening is a push button, never a switch: a \"turn everything off\" never opens a door. It is never sent again by the integration, nor after a restart. Every opening is written in the integration logs; the password never is.",
+        "fr": "Toute personne pouvant piloter les appareils dans Gladys (tableau de bord, scènes, application Gladys) peut ouvrir les portes une fois cette option cochée : ne l'autorisez que si votre Gladys est bien protégé. Une ouverture est un bouton, jamais un interrupteur : un « tout éteindre » n'ouvre jamais une porte. L'intégration ne la renvoie jamais, ni après un redémarrage. Chaque ouverture est écrite dans les journaux de l'intégration, jamais le mot de passe."
+      }
+    },
+    {
+      "key": "allow_open",
+      "type": "boolean",
+      "label": {
+        "en": "Allow opening the doors from Gladys",
+        "fr": "Autoriser l'ouverture des portes depuis Gladys"
+      },
+      "description": {
+        "en": "Once checked, every Gladys user, every scene and the Gladys mobile app can release the door relays.",
+        "fr": "Une fois cochée, tout utilisateur de Gladys, toute scène et l'application mobile Gladys peuvent déclencher les relais de porte."
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "open_seconds",
+      "type": "number",
+      "label": {
+        "en": "Opening duration (seconds)",
+        "fr": "Durée d'ouverture (secondes)"
+      },
+      "description": {
+        "en": "The relay closes by itself after this time (1 to 30), whatever happens to Gladys.",
+        "fr": "Le relais se referme de lui-même après ce délai (1 à 30), quoi qu'il arrive à Gladys."
+      },
+      "required": false,
+      "default": 5,
+      "min": 1,
+      "max": 30
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the names",
+        "fr": "Langue des noms"
+      },
+      "description": {
+        "en": "Used for the names of the devices and features added from now on.",
+        "fr": "Sert aux noms des appareils et fonctionnalités ajoutés désormais."
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français"
+          }
+        },
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
+      "key": "test_connection",
+      "label": {
+        "en": "Test the connection",
+        "fr": "Tester la connexion"
+      },
       "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "door_opened",
+      "label": {
+        "en": "Akuvox door opened",
+        "fr": "Porte Akuvox ouverte"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "The door log of a device shows a granted access (code, card, face, app...). An opening from Gladys is not one.",
+        "fr": "Le journal des portes d'un appareil montre un accès accordé (code, badge, visage, application…). Une ouverture depuis Gladys n'en est pas une."
       },
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": {
+            "en": "Device (empty: any)",
+            "fr": "Appareil (vide : tous)"
+          }
+        }
+      ],
+      "variables": [
+        {
+          "key": "relay",
+          "type": "string",
+          "label": {
+            "en": "Relay",
+            "fr": "Relais"
+          }
         },
         {
-          "key": "target",
+          "key": "method",
+          "type": "string",
+          "label": {
+            "en": "Method (as the device says it)",
+            "fr": "Moyen (tel que dit par l'appareil)"
+          }
+        },
+        {
+          "key": "user",
+          "type": "string",
+          "label": {
+            "en": "User",
+            "fr": "Utilisateur"
+          }
+        }
+      ]
+    },
+    {
+      "key": "access_denied",
+      "label": {
+        "en": "Akuvox access denied",
+        "fr": "Accès Akuvox refusé"
+      },
+      "description": {
+        "en": "The door log of a device shows a refused access (wrong code, unknown card...).",
+        "fr": "Le journal des portes d'un appareil montre un accès refusé (mauvais code, badge inconnu…)."
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Device (empty: any)",
+            "fr": "Appareil (vide : tous)"
+          }
+        }
+      ],
+      "variables": [
+        {
+          "key": "method",
+          "type": "string",
+          "label": {
+            "en": "Method (as the device says it)",
+            "fr": "Moyen (tel que dit par l'appareil)"
+          }
+        },
+        {
+          "key": "user",
+          "type": "string",
+          "label": {
+            "en": "User",
+            "fr": "Utilisateur"
+          }
+        }
+      ]
+    },
+    {
+      "key": "call",
+      "label": {
+        "en": "Akuvox call",
+        "fr": "Appel Akuvox"
+      },
+      "description": {
+        "en": "The call log of a device shows a new call (a visitor ringing makes a dialed call on a door phone).",
+        "fr": "Le journal des appels d'un appareil montre un nouvel appel (un visiteur qui sonne fait un appel émis sur un interphone de porte)."
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Device (empty: any)",
+            "fr": "Appareil (vide : tous)"
+          }
+        },
+        {
+          "key": "type",
           "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "label": {
+            "en": "Kind (empty: any)",
+            "fr": "Type (vide : tous)"
+          },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "dialed",
+              "label": {
+                "en": "Dialed",
+                "fr": "Émis"
+              }
+            },
+            {
+              "value": "received",
+              "label": {
+                "en": "Received",
+                "fr": "Reçu"
+              }
+            },
+            {
+              "value": "missed",
+              "label": {
+                "en": "Missed",
+                "fr": "Manqué"
+              }
+            },
+            {
+              "value": "other",
+              "label": {
+                "en": "Other",
+                "fr": "Autre"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "type",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Kind",
+            "fr": "Type"
+          }
+        },
+        {
+          "key": "name",
+          "type": "string",
+          "label": {
+            "en": "Name of the other party",
+            "fr": "Nom du correspondant"
+          }
         }
       ]
-    }
-  ],
-  "scene_actions": [
-    {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
-      },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }

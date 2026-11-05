@@ -1,61 +1,94 @@
-# Demo Devices Template
+# Akuvox for Gladys
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+**Unofficial integration, not affiliated with Akuvox**, for the Akuvox door phones and access controllers
+(E, R, X and A series: E12, E18, R20, R29, X915, X916, A05…) on your local network, through their **HTTP
+API**, without the Akuvox cloud. **Never tested with a real device**: built from the pylocal-akuvox 1.7.0
+library and the "Local Akuvox" Home Assistant integration 1.0.5. Your feedback is welcome.
 
-## What you get
+## What it does
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+- **State of the door relays** (relays A to D): "locked" at rest, "unlocked" while the relay is
+  released. Read only.
+- **An "Open relay" button** per relay, **off by default**: check "Allow opening the doors from Gladys".
+  It is a push button, never a switch: a "turn everything off" or "lock everything" never opens a door.
+- **Scene triggers**:
+  - "Akuvox door opened": a granted access in the door log (code, card, face, app…), with the relay, the
+    method and the user name;
+  - "Akuvox access denied": a refused access (wrong code, unknown card…);
+  - "Akuvox call": a new call in the call log (dialed, received, missed), with the name of the other
+    party. A visitor ringing makes a **dialed** call on a door phone.
+
+The PIN or card number of the log is never read nor published.
+
+## Prepare the device
+
+In the web page of each device (its IP address in a browser):
+
+1. **Settings → HTTP API**: enable the API, choose **Digest** (recommended) or Basic authentication, and
+   create a user and a password. "None" or an allowlist of addresses works too: then add the address of
+   Gladys to the list.
+2. Give the device a **fixed IP address** in your router.
+3. The relays must be in **automatic** mode (close after a delay), the default. A relay in manual
+   (bistable) mode is not opened by the integration.
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+- **Addresses of the devices**: separated by commas, 8 at most, with `:port` if the web page is not on
+  port 80. The same user and password serve for all.
+- **Authentication**: as on the devices. With **Digest**, the password never travels on the network; with
+  **Basic**, it travels in clear on your local network at every request. If a device asks for Basic while
+  Digest is chosen, nothing is sent and the status says so.
+- **Reading interval**: 5 to 300 s (10 s by default). The devices push nothing: an opening or a call shows
+  within this time.
+- **Opening duration**: 1 to 30 s (5 s by default). The relay closes by itself after it, whatever happens
+  to Gladys: the device closes it.
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+The **Test the connection** button reads the identity of each device (at most once every 5 s per device).
 
-## Actions
+## Safety of the opening
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+- Off by default; the option is read again right before sending: unchecked while an opening waits for the
+  device, nothing leaves.
+- Right before each opening, the integration reads the identity of the device again (its MAC address): if
+  another device answers at this address, nothing is sent.
+- An opening is **never sent again** by the integration, never retried, never replayed after a restart.
+- An opening goes before the readings: a slow reading is dropped, never waited for.
+- The result is in the status: "opened, confirmed" only when the relay, at rest before, is read released
+  after it; otherwise "accepted by the device, not read back yet", "sent, no answer (maybe opened)",
+  "refused by the device" or "nothing sent" with the reason.
+- There is no closing command: the relay closes by itself (automatic mode of the API).
 
-## Scenes
+Refusals of an opening before anything is sent: option unchecked, credentials refused, device unknown or
+not read yet, another device at the address, identity unreadable, device unreachable, relay configuration
+unreadable, relay in manual mode, relay not on the device, too many commands waiting (4 per device), the
+3.3 s deadline passed before sending, integration stopped or reconfigured.
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+## Refused credentials
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+A device that refuses the user or the password is not asked again (some lock their API after a few
+failures): the status says so, and it holds across a restart. The integration tries again as soon as you
+change the credentials or click "Test the connection" (one try per click). A 403 (address not allowed) is
+not a credentials refusal: it is tried again after 1 minute, then 2, 4… up to one hour.
 
-## Dashboard
+## Events: what to know
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+- A log entry becomes an event only if it appears **between two close readings**: at start, after an
+  outage of the device longer than 2 minutes (or 3 intervals), or when the log was cleared, the entries
+  already there are not published. The time of the log is the device's own, which the integration cannot
+  compare with its clock: it publishes nothing stale.
+- The entry an opening from Gladys leaves in the log is not a "door opened" event (a scene opening the
+  door on that event would loop).
+- At most 5 new entries per log and per reading (the newest), 200 events per minute.
+- The log read is the first page the device returns: if your model returns the oldest first, say so in the
+  forum topic.
 
-## Troubleshooting
+## Known limits
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- Not supported yet: HTTPS, indoor monitors (IT83, opening through `/fcgi/do`), relays in manual mode,
+  events pushed by the device (Action URL).
+- Personal data: the user name of an access goes to your Gladys scenes, nowhere else, never into the
+  integration logs.
+
+## Help
+
+Gladys forum (topic of the integration) or the GitHub issues of `LM1LC3N7/gladys-akuvox`.

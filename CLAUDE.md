@@ -5,44 +5,46 @@ contributors.
 
 ## What this is
 
-A Gladys Assistant **external integration**: a Node.js service (Node 22+, ESM,
-no build step) that runs in its own sandboxed Docker container and talks to
-Gladys through
+A Gladys Assistant **external integration** for Akuvox door phones and access
+controllers, over their local HTTP API: a Node.js service (Node 22+, ESM, no
+build step) in its own sandboxed Docker container, talking to Gladys through
 [`@gladysassistant/integration-sdk`](https://github.com/GladysAssistant/integration-sdk-js),
-its only runtime dependency. It started from the official JavaScript template.
+its only runtime dependency.
 
 ## Commands
 
 ```bash
 npm install
-npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
-npm run lint                              # ESLint
-npm run format:check                      # Prettier, as the CI runs it
-npm run format                            # Prettier, fix in place
-npx github:GladysAssistant/integration-store .   # store admission checks
+npm test                                  # node --test --test-timeout=60000
+node --test test/app.test.js              # one file
+npm run lint
+npm run format:check
 ```
-
-The CI (`.github/workflows/ci.yml`) runs `format:check`, `lint` and `test` on
-Node 22 and 24, and builds the Docker image: run the three commands before
-pushing.
 
 ## Architecture
 
 ```
 index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
-src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
-.github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
+src/handlers.js                   the SDK handlers, shared with the tests; getConfig() retried without end
+src/app.js                        AkuvoxApp: configuration, sessions, Discovery, states, events, status
+src/session.js                    one device: reading cycle, identity, relays, logs, openings
+src/akuvox.js                     the HTTP API of the device (pure: paths, envelope, parsers)
+src/http.js                       one request (node:http): Basic/Digest, budget, size cap, "sent or not"
+src/events.js                     log tracker (baseline, new entries) and rate limits
+src/devices.js                    Gladys devices (pure)
+src/store.js                      /data: refused credentials (8-bit salted fingerprint)
+src/config.js, src/constants.js   normalization, every bound and timing
+src/i18n.js                       French and English texts
+test/                             node --test, the SDK fake Gladys + test/helpers/fakeAkuvox.js
 ```
+
+Safety rules (see TODO.md "Decisions"): opening is off by default, a push
+button, never a switch; the option is read again right before the bytes leave;
+the MAC address is read right before every opening; an opening is never sent
+again; a command never waits for a reading, and a reading that left before a
+command is never applied after it; a refused password is never tried again
+automatically; the password, the codes of the door log and the configuration
+of the device are never logged nor written to `/data`.
 
 ## Rules
 
@@ -56,8 +58,8 @@ test/                             node --test, against the SDK's fake Gladys (in
   writable volume. Never log tokens, passwords or API keys.
 - **Versions belong to the Release workflow** (Actions → Release). Never edit
   `version` in `package.json` or in the manifest, nor the `docker_image` tag,
-  by hand — except on the README's hand-pushed tag path, which bumps all three
-  together before tagging. `test/manifest.test.js` checks they agree.
+  by hand (0.1.0 was the one exception). `test/manifest.test.js` checks they
+  agree.
 - **Changelog.** Every user-visible change adds a line under `## [Unreleased]`
   in `CHANGELOG.md` (`### Added`, `Changed`, `Fixed`, `Removed`, `Security`).
   Never write a version heading: the Release workflow moves the section, and it
@@ -73,4 +75,4 @@ test/                             node --test, against the SDK's fake Gladys (in
 - **User-facing text** is bilingual (English and French): action messages,
   manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
-  in English. Tests never touch the network.
+  in English. Tests touch loopback only, and every wait in them is bounded.

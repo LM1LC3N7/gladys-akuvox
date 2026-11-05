@@ -1,67 +1,98 @@
-# Template de démonstration
+# Akuvox pour Gladys
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Intégration **non officielle, sans lien avec Akuvox**, pour les interphones et contrôles d'accès Akuvox
+(séries E, R, X et A : E12, E18, R20, R29, X915, X916, A05…) de votre réseau local, par leur **API HTTP**,
+sans le cloud Akuvox. **Jamais testé avec un vrai appareil** : construite d'après la bibliothèque
+pylocal-akuvox 1.7.0 et l'intégration Home Assistant « Local Akuvox » 1.0.5. Vos retours sont précieux.
 
-## Ce que vous obtenez
+## Ce qu'elle fait
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+- **État des relais de porte** (relais A à D) : « verrouillé » au repos, « déverrouillé » quand le relais
+  est déclenché. En lecture seule.
+- **Un bouton « Ouvrir le relais »** par relais, **désactivé par défaut** : il faut cocher « Autoriser
+  l'ouverture des portes depuis Gladys ». C'est un bouton poussoir, jamais un interrupteur : un « tout
+  éteindre » ou « tout verrouiller » n'ouvre jamais une porte.
+- **Déclencheurs de scène** :
+  - « Porte Akuvox ouverte » : un accès accordé dans le journal des portes (code, badge, visage,
+    application…), avec le relais, le moyen et le nom de l'utilisateur ;
+  - « Accès Akuvox refusé » : un accès refusé (mauvais code, badge inconnu…) ;
+  - « Appel Akuvox » : un nouvel appel dans le journal des appels (émis, reçu, manqué), avec le nom du
+    correspondant. Un visiteur qui sonne fait un appel **émis** sur un interphone de porte.
+
+Le code PIN ou le numéro de badge du journal n'est jamais lu ni publié.
+
+## Préparer l'appareil
+
+Dans la page web de chaque appareil (son adresse IP dans un navigateur) :
+
+1. **Paramètres → API HTTP** (Settings → HTTP API) : activez l'API, choisissez le mode
+   d'authentification **Digest** (conseillé) ou Basic, et créez un utilisateur et un mot de passe. Le mode
+   « Aucune » ou une liste d'adresses autorisées (allowlist) fonctionne aussi : ajoutez alors l'adresse de
+   Gladys à la liste.
+2. Donnez à l'appareil une **adresse IP fixe** dans votre box.
+3. Les relais doivent être en mode **automatique** (fermeture après un délai), le réglage par défaut. Un
+   relais en mode manuel (bistable) n'est pas ouvert par l'intégration.
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+- **Adresses des appareils** : séparées par des virgules, 8 au plus, avec `:port` si la page web n'est pas
+  sur le port 80. Le même utilisateur et le même mot de passe servent pour tous.
+- **Authentification** : comme sur les appareils. Avec **Digest**, le mot de passe ne circule jamais sur le
+  réseau ; avec **Basic**, il circule en clair sur votre réseau local à chaque requête. Si l'appareil
+  demande Basic alors que Digest est choisi, rien n'est envoyé et le statut le dit.
+- **Intervalle de lecture** : 5 à 300 s (10 s par défaut). Les appareils n'envoient rien d'eux-mêmes : une
+  ouverture ou un appel apparaît dans ce délai.
+- **Durée d'ouverture** : 1 à 30 s (5 s par défaut). Le relais se referme de lui-même après ce délai,
+  quoi qu'il arrive à Gladys : c'est l'appareil qui le referme.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+Le bouton **Tester la connexion** lit l'identité de chaque appareil (au plus une fois toutes les 5 s par
+appareil).
 
-## Actions
+## Sécurité de l'ouverture
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+- Désactivée par défaut ; l'option est relue juste avant l'envoi : décochée pendant qu'une ouverture
+  attend l'appareil, rien ne part.
+- Juste avant chaque ouverture, l'intégration relit l'identité de l'appareil (son adresse MAC) : si un autre
+  appareil répond à cette adresse, rien n'est envoyé.
+- Une ouverture n'est **jamais renvoyée** par l'intégration, ni réessayée, ni rejouée après un redémarrage.
+- Une ouverture passe devant les lectures : une lecture lente est abandonnée, jamais attendue.
+- Le résultat est dans le statut : « ouvert, confirmé » seulement si le relais, au repos avant, est relu
+  déclenché après ; sinon « accepté par l'appareil, pas encore relu », « envoyée, sans réponse (peut-être
+  ouvert) », « refusée par l'appareil » ou « rien envoyé » avec la raison.
+- Il n'y a pas de commande de fermeture : le relais se referme seul (mode automatique de l'API).
 
-## Scènes
+Les refus d'une ouverture avant tout envoi : option décochée, identifiants refusés, appareil inconnu ou
+pas encore lu, autre appareil à l'adresse, identité illisible, appareil injoignable, configuration des
+relais illisible, relais en mode manuel, relais absent, trop de commandes en attente (4 par appareil),
+délai de 3,3 s dépassé avant l'envoi, intégration arrêtée ou reconfigurée.
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+## Identifiants refusés
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+Un appareil qui refuse l'utilisateur ou le mot de passe n'est plus sollicité (certains bloquent leur API
+après plusieurs échecs) : le statut le dit, et cela tient après un redémarrage. L'intégration réessaie dès
+que vous changez les identifiants ou cliquez sur « Tester la connexion » (un essai par clic). Un refus
+d'accès 403 (adresse non autorisée) n'est pas un refus d'identifiants : il est réessayé après 1 minute,
+puis 2, 4… jusqu'à une heure.
 
-## Tableau de bord
+## Événements : ce qu'il faut savoir
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+- Une entrée des journaux devient un événement seulement si elle apparaît **entre deux lectures**
+  rapprochées : au démarrage, après une coupure de l'appareil plus longue que 2 minutes (ou 3 intervalles),
+  ou si le journal a été vidé, les entrées déjà là ne sont pas publiées. L'heure du journal est celle de
+  l'appareil, que l'intégration ne peut pas comparer à la sienne : elle ne publie rien de périmé.
+- L'entrée qu'une ouverture depuis Gladys laisse dans le journal n'est pas un événement « porte ouverte »
+  (une scène qui ouvre la porte sur cet événement tournerait en boucle).
+- Au plus 5 nouvelles entrées par journal et par lecture (les plus récentes), 200 événements par minute.
+- Le journal lu est la première page renvoyée par l'appareil : si votre modèle renvoie les plus anciennes
+  en premier, dites-le dans le sujet du forum.
 
-## Dépannage
+## Limites connues
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- Pas encore pris en charge : HTTPS, les moniteurs intérieurs (IT83, ouverture par `/fcgi/do`), les relais
+  en mode manuel, les événements poussés par l'appareil (Action URL).
+- Données personnelles : le nom de l'utilisateur d'un accès est transmis à vos scènes Gladys, jamais
+  ailleurs, jamais dans les journaux de l'intégration.
+
+## Aide
+
+Forum Gladys (sujet de l'intégration) ou issues GitHub du dépôt `LM1LC3N7/gladys-akuvox`.

@@ -42,6 +42,9 @@ import { T } from './i18n.js';
 /** A reading that stepped back (a command came, the session stopped): not a failure. */
 class Skip extends Error {}
 
+/** The door log methods that name a person at the door. */
+const CREDENTIAL = /pin|card|face|finger|qr|code|nfc|ble|bluetooth|plate|license|id ?card|rf/i;
+
 /** A command refused or failed: its text for the status, its message for Gladys. */
 export class CommandError extends Error {
   constructor(text, language) {
@@ -50,7 +53,12 @@ export class CommandError extends Error {
   }
 }
 
-const STOPPING_KINDS = new Set(['refused', 'basic-only', 'forbidden']);
+/** A refusal of the device: on identity or relays it stops the session, elsewhere it is "not read". */
+const AUTH_KINDS = new Set(['refused', 'basic-only', 'forbidden']);
+
+/** The next wait of an endpoint the device refuses: 1 min, doubled, at most 1 h. */
+const nextWait = (wait, timings) =>
+  Math.min(timings.forbiddenMax, wait === undefined ? timings.forbiddenFirst : wait * 2);
 
 export class Session {
   constructor(app, host) {
@@ -65,6 +73,10 @@ export class Session {
     this.trackers = { door: new LogTracker(), call: new LogTracker() };
     this.logState = { door: 'ok', call: 'ok' };
     this.logRecheck = { door: 0, call: 0 };
+    this.logWait = { door: undefined, call: undefined };
+    this.configState = 'ok';
+    this.configRecheck = 0;
+    this.configWait = undefined;
     this.epoch = 0;
     this.currentRead = undefined;
     this.timer = undefined;
@@ -76,6 +88,7 @@ export class Session {
     this.waiting = 0;
     this.commandChain = Promise.resolve();
     this.cmdVerifiedAt = undefined;
+    this.cmdConfigAt = undefined;
     this.lastCommand = undefined;
     this.ownOpens = [];
     this.lastTest = -Infinity;
@@ -205,10 +218,7 @@ export class Session {
       return undefined;
     }
     if (kind === 'forbidden') {
-      this.forbiddenWait = Math.min(
-        this.app.timings.forbiddenMax,
-        this.forbiddenWait === undefined ? this.app.timings.forbiddenFirst : this.forbiddenWait * 2,
-      );
+      this.forbiddenWait = nextWait(this.forbiddenWait, this.app.timings);
       this.setState('forbidden');
       return this.forbiddenWait;
     }
@@ -233,16 +243,28 @@ export class Session {
     const info = parseInfo(await this.read(PATHS.info));
     this.applyIdentity(info);
     // The relay configuration first (it tells how to read an integer state),
-    // every 10 minutes; never blocking.
+    // every 10 minutes; never blocking: refused (401/403) or missing, it is
+    // "not read" and asked again later, the relays are read anyway.
+    const mono = this.mono;
     if (
       !this.configUnsupported &&
-      (!this.relayConfig || this.mono - this.relayConfig.at > this.app.timings.relayConfigEvery)
+      this.configRecheck <= mono &&
+      (!this.relayConfig || mono - this.relayConfig.at > this.app.timings.relayConfigEvery)
     ) {
       try {
         this.applyConfig(parseRelayConfig(await this.read(PATHS.config, LIMITS.maxConfigBody)));
+        this.setConfigState('ok');
+        this.configWait = undefined;
       } catch (err) {
-        if (err instanceof Skip || STOPPING_KINDS.has(err?.kind)) throw err;
-        if (err?.kind === 'unsupported') this.configUnsupported = true;
+        if (err instanceof Skip) throw err;
+        if (AUTH_KINDS.has(err?.kind)) {
+          this.configWait = nextWait(this.configWait, this.app.timings);
+          this.configRecheck = this.mono + this.configWait;
+          this.setConfigState('unauthorized');
+        } else if (err?.kind === 'unsupported') {
+          this.configUnsupported = true;
+          this.setConfigState('unsupported');
+        }
       }
     }
     const relays = parseRelayStatus(await this.read(PATHS.relays));
@@ -250,6 +272,13 @@ export class Session {
     this.setState('ok');
     await this.readLog('door', PATHS.doorLog);
     await this.readLog('call', PATHS.callLog);
+  }
+
+  setConfigState(state) {
+    if (this.configState !== state) {
+      this.configState = state;
+      this.app.refreshStatus();
+    }
   }
 
   applyIdentity(info) {
@@ -263,6 +292,7 @@ export class Session {
       this.trackers.call.reset();
       this.ownOpens = [];
       this.cmdVerifiedAt = undefined;
+      this.cmdConfigAt = undefined;
     }
     const changed =
       !this.identity ||
@@ -308,8 +338,13 @@ export class Session {
     try {
       entries = parseLog(await this.read(path), kind);
     } catch (err) {
-      if (err instanceof Skip || STOPPING_KINDS.has(err?.kind)) throw err;
-      if (err?.kind === 'unsupported') {
+      if (err instanceof Skip) throw err;
+      if (AUTH_KINDS.has(err?.kind)) {
+        // Refused for this log only: not read, asked again later.
+        this.logWait[kind] = nextWait(this.logWait[kind], this.app.timings);
+        this.logRecheck[kind] = this.mono + this.logWait[kind];
+        this.logState[kind] = 'unauthorized';
+      } else if (err?.kind === 'unsupported') {
         this.logState[kind] = 'unsupported';
         this.logRecheck[kind] = mono + 3_600_000;
       } else {
@@ -318,6 +353,7 @@ export class Session {
       this.app.refreshStatus();
       return;
     }
+    this.logWait[kind] = undefined;
     if (this.logState[kind] !== 'ok') {
       this.logState[kind] = 'ok';
       this.app.refreshStatus();
@@ -335,12 +371,20 @@ export class Session {
       if (kind === 'door') this.doorEvent(entry);
       else this.callEvent(entry);
     }
+    if (kind === 'door') {
+      // An opening whose entry two door readings made after it did not show
+      // never will: its mark goes (bounded in number and age as well).
+      for (const own of this.ownOpens) if (own.at < mono) own.reads += 1;
+      this.ownOpens = this.ownOpens.filter(
+        (o) => o.reads < 2 && this.mono - o.at <= this.app.timings.ownOpenMax,
+      );
+    }
   }
 
   doorEvent(entry) {
     const success = doorSuccess(entry.status);
     if (success === undefined) return;
-    if (success && this.consumeOwnOpen(entry.relay)) return;
+    if (success && this.consumeOwnOpen(entry)) return;
     this.app.sceneEvent(success ? TRIGGERS.OPENED : TRIGGERS.DENIED, {
       device: this.app.deviceId(this.identity.mac),
       relay: entry.relay || null,
@@ -359,20 +403,24 @@ export class Session {
 
   /**
    * The door log entry an opening from Gladys made is not an event (a scene
-   * opening the door on "door opened" would loop). One entry per opening,
-   * within the window, on the relay it opened.
+   * opening the door on "door opened" would loop): one entry per opening, on
+   * the relay it opened, until two door readings made after it went by
+   * (whatever the interval). An entry with a credential (PIN, card, face...)
+   * is someone at the door, never taken for it.
    */
-  consumeOwnOpen(relayText) {
-    const mono = this.mono;
-    this.ownOpens = this.ownOpens.filter(
-      (o) => mono - o.at <= this.app.timings.ownOpenWindow && mono >= o.at,
-    );
+  consumeOwnOpen(entry) {
+    if (CREDENTIAL.test(entry.method)) return false;
     const index = this.ownOpens.findIndex(
-      (o) => !relayText || relayText.includes(String(relayNumber(o.letter))),
+      (o) => !entry.relay || entry.relay.includes(String(relayNumber(o.letter))),
     );
     if (index === -1) return false;
     this.ownOpens.splice(index, 1);
     return true;
+  }
+
+  markOwnOpen(letter, at) {
+    this.ownOpens.push({ letter, at, reads: 0 });
+    if (this.ownOpens.length > LIMITS.ownOpens) this.ownOpens.shift();
   }
 
   // --- commands ------------------------------------------------------------
@@ -389,7 +437,7 @@ export class Session {
     this.waiting += 1;
     this.epoch += 1;
     this.currentRead?.abort();
-    const run = this.commandChain.then(() => this.runOpen(letter, deadline));
+    const run = this.commandChain.then(() => this.runOpen(letter, deadline, received));
     this.commandChain = run.catch(() => {});
     try {
       return await run;
@@ -411,7 +459,7 @@ export class Session {
     }
   }
 
-  async runOpen(letter, deadline) {
+  async runOpen(letter, deadline, received) {
     const language = this.app.config.language;
     const L = letter.toUpperCase();
     const fail = (text) => {
@@ -432,12 +480,15 @@ export class Session {
       }
       if (err?.kind === 'withdrawn') return err.reason ?? T.openDisabled;
       if (err?.kind === 'aborted') return T.stopped;
+      if (err?.kind === 'forbidden') return T.forbiddenReason;
+      if (err?.kind === 'basic-only') return T.basicOnlyReason;
       if (err?.kind === 'answer' && !err.sent) return T.identityUnreadable;
       return T.unreachable;
     };
 
-    // 1. Identity, read right before (shared by the commands of the last 2 s).
-    if (this.cmdVerifiedAt === undefined || this.mono - this.cmdVerifiedAt > 2000) {
+    // 1. Identity, read right before (shared with a command that read it after
+    // this one arrived).
+    if (this.cmdVerifiedAt === undefined || this.cmdVerifiedAt < received) {
       let info;
       try {
         info = parseInfo(parseAnswer(await this.commandRequest(PATHS.info, step())));
@@ -449,11 +500,11 @@ export class Session {
       this.cmdVerifiedAt = this.mono;
     }
 
-    // 2. The relay configuration, when not read for 10 minutes.
-    if (
-      !this.configUnsupported &&
-      (!this.relayConfig || this.mono - this.relayConfig.at > this.app.timings.relayConfigEvery)
-    ) {
+    // 2. The relay configuration, read right before (shared with a command
+    // that read it after this one arrived): its mode must be automatic (0) and its type known; a
+    // relay in manual mode, or one whose mode cannot be read, is never sent a
+    // trigger (on a bistable relay it would stay released).
+    if (this.cmdConfigAt === undefined || this.cmdConfigAt < received) {
       if (remaining() < 100) notSent(T.tooLate);
       try {
         this.applyConfig(
@@ -463,13 +514,17 @@ export class Session {
             ),
           ),
         );
+        this.cmdConfigAt = this.mono;
       } catch (err) {
-        if (err?.kind === 'unsupported') this.configUnsupported = true;
-        else notSent(err?.kind === 'refused' ? reasonOf(err) : T.configNotRead);
+        if (err?.kind === 'aborted') notSent(T.stopped);
+        if (err?.kind === 'unsupported') notSent(T.modeUnknown);
+        if (AUTH_KINDS.has(err?.kind)) notSent(T.configForbidden);
+        notSent(T.configNotRead);
       }
     }
     const relay = this.relayConfig?.relays.get(letter);
     if (relay?.mode === 1) notSent(T.manualRelay);
+    if (relay?.mode !== 0 || (relay.type !== 0 && relay.type !== 1)) notSent(T.modeUnknown);
     if (!this.relays.has(letter)) notSent(T.unknownRelay);
     const before = this.triggered(letter);
     if (remaining() < 100) notSent(T.tooLate);
@@ -477,7 +532,7 @@ export class Session {
     // 3. The trigger: automatic close after the opening duration.
     const body = triggerBody({
       num: relayNumber(letter),
-      level: relay?.type ?? 0,
+      level: relay.type,
       delay: this.app.config.openSeconds,
     });
     const sentAt = this.mono;
@@ -503,7 +558,7 @@ export class Session {
       });
     } catch (err) {
       if (!err?.sent) notSent(reasonOf(err));
-      this.ownOpens.push({ letter, at: sentAt });
+      this.markOwnOpen(letter, sentAt);
       this.followUp(letter, before);
       this.app.logger.info(`Opening ${this.host.key} relay ${L}: sent, no answer`);
       fail(T.sentUnconfirmed(L));
@@ -513,7 +568,7 @@ export class Session {
     } catch {
       fail(T.rejectedByDevice(L));
     }
-    this.ownOpens.push({ letter, at: sentAt });
+    this.markOwnOpen(letter, sentAt);
     this.app.logger.info(`Opening ${this.host.key} relay ${L}: accepted by the device`);
 
     // 4. Read back: confirmed only when released after being at rest.

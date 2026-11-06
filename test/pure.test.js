@@ -195,6 +195,10 @@ test('relays: A to D only; strings, and integers only with a known type', () => 
   assert.equal(relayTriggered(1, undefined), undefined, 'an integer without its type is unknown');
   assert.equal(relayTriggered(2, 0), undefined);
   assert.equal(relayTriggered(null, 0), undefined);
+  // Wrapped in an object (as the reference reads it).
+  assert.equal(relayTriggered({ state: 1 }, 0), true);
+  assert.equal(relayTriggered({ state: 'closed' }), false);
+  assert.equal(relayTriggered({}, 0), undefined);
 });
 
 test('relay configuration: mode, type, names, location; nothing else kept', () => {

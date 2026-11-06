@@ -1,0 +1,404 @@
+[
+  {
+    "name": "open(): option check removed",
+    "file": "src/session.js",
+    "from": "    if (!this.app.config.allowOpen) refuse(T.openDisabled);",
+    "to": ""
+  },
+  {
+    "name": "runOpen(): option check removed",
+    "file": "src/session.js",
+    "from": "    if (!this.app.config.allowOpen) notSent(T.openDisabled);",
+    "to": ""
+  },
+  {
+    "name": "beforeSend: option check removed",
+    "file": "src/session.js",
+    "from": "          if (!this.app.config.allowOpen) {",
+    "to": "          if (false) {"
+  },
+  {
+    "name": "beforeSend: deadline check removed",
+    "file": "src/session.js",
+    "from": "          if (this.mono >= deadline) {",
+    "to": "          if (false) {"
+  },
+  {
+    "name": "identity check removed",
+    "file": "src/session.js",
+    "from": "      if (info.mac !== this.identity.mac) notSent(T.otherDevice);",
+    "to": ""
+  },
+  {
+    "name": "identity shared with an older command",
+    "file": "src/session.js",
+    "from": "this.cmdVerifiedAt < received",
+    "to": "this.cmdVerifiedAt < received - 3600000"
+  },
+  {
+    "name": "configuration shared with an older command",
+    "file": "src/session.js",
+    "from": "this.cmdConfigAt < received",
+    "to": "this.cmdConfigAt < received - 3600000"
+  },
+  {
+    "name": "manual relay accepted",
+    "file": "src/session.js",
+    "from": "    if (relay?.mode === 1) notSent(T.manualRelay);",
+    "to": ""
+  },
+  {
+    "name": "unknown mode or type accepted",
+    "file": "src/session.js",
+    "from": "    if (relay?.mode !== 0 || (relay.type !== 0 && relay.type !== 1)) notSent(T.modeUnknown);",
+    "to": ""
+  },
+  {
+    "name": "unknown relay accepted",
+    "file": "src/session.js",
+    "from": "    if (!this.relays.has(letter)) notSent(T.unknownRelay);",
+    "to": ""
+  },
+  {
+    "name": "command: configuration 404 accepted",
+    "file": "src/session.js",
+    "from": "        if (err?.kind === 'unsupported') notSent(T.modeUnknown);\n        if (AUTH",
+    "to": "        if (AUTH"
+  },
+  {
+    "name": "command: configuration 401/403 as refusal",
+    "file": "src/session.js",
+    "from": "        if (AUTH_KINDS.has(err?.kind)) notSent(T.configForbidden);",
+    "to": "        if (AUTH_KINDS.has(err?.kind)) notSent(reasonOf(err));"
+  },
+  {
+    "name": "tooLate before the configuration removed",
+    "file": "src/session.js",
+    "from": "      if (remaining() < 100) notSent(T.tooLate);\n      try {",
+    "to": "      try {"
+  },
+  {
+    "name": "tooLate before the trigger removed",
+    "file": "src/session.js",
+    "from": "    const before = this.triggered(letter);\n    if (remaining() < 100) notSent(T.tooLate);",
+    "to": "    const before = this.triggered(letter);"
+  },
+  {
+    "name": "queue limit removed",
+    "file": "src/session.js",
+    "from": "    if (this.waiting >= LIMITS.commandQueue) refuse(T.queueFull);",
+    "to": ""
+  },
+  {
+    "name": "no abort of the reading",
+    "file": "src/session.js",
+    "from": "    this.epoch += 1;\n    this.currentRead?.abort();",
+    "to": "    this.epoch += 1;"
+  },
+  {
+    "name": "no epoch bump",
+    "file": "src/session.js",
+    "from": "    this.epoch += 1;\n",
+    "to": "\n"
+  },
+  {
+    "name": "read: epoch check after answer removed",
+    "file": "src/session.js",
+    "from": "      if (this.stopped || epoch !== this.epoch) throw new Skip();",
+    "to": ""
+  },
+  {
+    "name": "read: waiting check removed",
+    "file": "src/session.js",
+    "from": "    if (this.stopped || this.waiting > 0) throw new Skip();",
+    "to": "    if (this.stopped) throw new Skip();"
+  },
+  {
+    "name": "runOpen: refusal not checked again",
+    "file": "src/session.js",
+    "from": "    if (this.state === 'refused') notSent(T.credentialsRefused);",
+    "to": ""
+  },
+  {
+    "name": "refused(): cycle timer kept",
+    "file": "src/session.js",
+    "from": "  refused() {\n    this.app.timers.clearTimeout(this.timer);\n    this.timer = undefined;",
+    "to": "  refused() {"
+  },
+  {
+    "name": "confirm without rest before",
+    "file": "src/session.js",
+    "from": "        if (before === false && this.triggered(letter) === true) {\n          this.lastCommand = T.confirmed(L);",
+    "to": "        if (this.triggered(letter) === true) {\n          this.lastCommand = T.confirmed(L);"
+  },
+  {
+    "name": "mode 1 in trigger",
+    "file": "src/akuvox.js",
+    "from": "data: { num, mode: 0, level, delay }",
+    "to": "data: { num, mode: 1, level, delay }"
+  },
+  {
+    "name": "level ignores type",
+    "file": "src/session.js",
+    "from": "      level: relay.type,",
+    "to": "      level: 0,"
+  },
+  {
+    "name": "own-open suppression removed",
+    "file": "src/session.js",
+    "from": "    if (success && this.consumeOwnOpen(entry)) return;",
+    "to": ""
+  },
+  {
+    "name": "own-open: credentials swallowed",
+    "file": "src/session.js",
+    "from": "    if (CREDENTIAL.test(entry.method)) return false;",
+    "to": ""
+  },
+  {
+    "name": "own-open: not marked on sent without answer",
+    "file": "src/session.js",
+    "from": "      if (!err?.sent) notSent(reasonOf(err));\n      this.markOwnOpen(letter, sentAt);",
+    "to": "      if (!err?.sent) notSent(reasonOf(err));"
+  },
+  {
+    "name": "own-open: kept for ever",
+    "file": "src/session.js",
+    "from": "(o) => o.reads < 2 && this.mono - o.at <= this.app.timings.ownOpenMax,",
+    "to": "(o) => true,"
+  },
+  {
+    "name": "own-open: dropped after one reading",
+    "file": "src/session.js",
+    "from": "o.reads < 2 &&",
+    "to": "o.reads < 1 &&"
+  },
+  {
+    "name": "secondary log 401/403 stops the session",
+    "file": "src/session.js",
+    "from": "      if (AUTH_KINDS.has(err?.kind)) {\n        // Refused for this log only",
+    "to": "      if (AUTH_KINDS.has(err?.kind)) throw err;\n      if (false) {\n        // Refused for this log only"
+  },
+  {
+    "name": "secondary log not waited",
+    "file": "src/session.js",
+    "from": "        this.logRecheck[kind] = this.mono + this.logWait[kind];",
+    "to": ""
+  },
+  {
+    "name": "secondary config 401/403 stops the session",
+    "file": "src/session.js",
+    "from": "        if (AUTH_KINDS.has(err?.kind)) {\n          this.configWait",
+    "to": "        if (AUTH_KINDS.has(err?.kind)) throw err;\n        if (false) {\n          this.configWait"
+  },
+  {
+    "name": "refusal not kept at start",
+    "file": "src/app.js",
+    "from": "      if (this.isRefused(session)) session.state = 'refused';\n      else session.begin(0);",
+    "to": "      session.begin(0);"
+  },
+  {
+    "name": "refusal not lifted by new credentials",
+    "file": "src/app.js",
+    "from": "if ((credentialsChanged || saved) && Object.keys(this.data.refused).length) {",
+    "to": "if (credentialsChanged && false) {"
+  },
+  {
+    "name": "refusal not lifted by a save",
+    "file": "src/app.js",
+    "from": "if ((credentialsChanged || saved) && Object.keys(this.data.refused).length) {",
+    "to": "if (credentialsChanged && Object.keys(this.data.refused).length) {"
+  },
+  {
+    "name": "lifted session not restarted",
+    "file": "src/app.js",
+    "from": "          existing.state = 'starting';\n          existing.begin(0);",
+    "to": ""
+  },
+  {
+    "name": "Discovery awaited in the chain",
+    "file": "src/app.js",
+    "from": "    this.scan();\n  }",
+    "to": "    await this.scan();\n  }"
+  },
+  {
+    "name": "unreadable /data overwritten",
+    "file": "src/app.js",
+    "from": "    if (this.storeState === 'unreadable') return;",
+    "to": ""
+  },
+  {
+    "name": "event limiter removed",
+    "file": "src/app.js",
+    "from": "    if (!this.eventLimiter.take(this.monotonic())) {",
+    "to": "    if (false) {"
+  },
+  {
+    "name": "state limiter removed",
+    "file": "src/app.js",
+    "from": "    if (!this.stateLimiter.take(this.monotonic())) return;",
+    "to": ""
+  },
+  {
+    "name": "down backoff constant",
+    "file": "src/session.js",
+    "from": "      this.app.config.pollMs * 2 ** Math.min(this.failures - 1, 10),",
+    "to": "      this.app.config.pollMs,"
+  },
+  {
+    "name": "403 wait not doubled",
+    "file": "src/session.js",
+    "from": "Math.min(timings.forbiddenMax, wait === undefined ? timings.forbiddenFirst : wait * 2);",
+    "to": "Math.min(timings.forbiddenMax, wait === undefined ? timings.forbiddenFirst : wait);"
+  },
+  {
+    "name": "403 wait without a ceiling",
+    "file": "src/session.js",
+    "from": "Math.min(timings.forbiddenMax, wait === undefined",
+    "to": "Math.min(Infinity, wait === undefined"
+  },
+  {
+    "name": "refused: loop not stopped",
+    "file": "src/session.js",
+    "from": "    if (kind === 'refused') {\n      this.refused();\n      return undefined;",
+    "to": "    if (kind === 'refused') {\n      this.refused();\n      return 1000;"
+  },
+  {
+    "name": "reason: 403 said unreachable",
+    "file": "src/session.js",
+    "from": "      if (err?.kind === 'forbidden') return T.forbiddenReason;",
+    "to": ""
+  },
+  {
+    "name": "default type 0 without config API removed",
+    "file": "src/session.js",
+    "from": "(this.configUnsupported ? 0 : undefined)",
+    "to": "undefined"
+  },
+  {
+    "name": "relay state object not unwrapped",
+    "file": "src/akuvox.js",
+    "from": "  if (isObject(value)) return relayTriggered(own(value, 'state'), type);",
+    "to": ""
+  },
+  {
+    "name": "tracker: gap ignored",
+    "file": "src/events.js",
+    "from": "mono - this.readAt > gap ||",
+    "to": "false ||"
+  },
+  {
+    "name": "tracker: cleared log not rebased",
+    "file": "src/events.js",
+    "from": "    if (top < this.max) {",
+    "to": "    if (false) {"
+  },
+  {
+    "name": "events cap removed",
+    "file": "src/events.js",
+    "from": "fresh.length - LIMITS.eventsPerRead",
+    "to": "0"
+  },
+  {
+    "name": "digest: basic-only allowed",
+    "file": "src/http.js",
+    "from": "const basicOnly = auth.mode === 'digest' && !digest && challenges.basic;",
+    "to": "const basicOnly = false;"
+  },
+  {
+    "name": "maxBody streamed check removed",
+    "file": "src/http.js",
+    "from": "        if (size > maxBody) {",
+    "to": "        if (false) {"
+  },
+  {
+    "name": "declared length check removed",
+    "file": "src/http.js",
+    "from": "if (Number.isFinite(declared) && declared > maxBody) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "beforeSend ignored",
+    "file": "src/http.js",
+    "from": "        if (veto !== true) {",
+    "to": "        if (false) {"
+  },
+  {
+    "name": "digest retried twice",
+    "file": "src/http.js",
+    "from": "if (round === 0 && fresh) {",
+    "to": "if (fresh || round < 1) {"
+  },
+  {
+    "name": "connection lost after the write said not sent",
+    "file": "src/http.js",
+    "from": "connected ? 'lost' : 'offline',\n          {\n            sent: connected,",
+    "to": "connected ? 'lost' : 'offline',\n          {\n            sent: false,"
+  },
+  {
+    "name": "door code read",
+    "file": "src/akuvox.js",
+    "from": "        status: cleanText(own(item, 'Status'), 16),",
+    "to": "        status: cleanText(own(item, 'Status'), 16),\n        code: cleanText(own(item, 'Code')),"
+  },
+  {
+    "name": "store: FIFO accepted",
+    "file": "src/store.js",
+    "from": "if (!stat.isFile()) throw new Error('not a regular file');",
+    "to": ""
+  },
+  {
+    "name": "store: no timeout",
+    "file": "src/store.js",
+    "from": "const text = await withTimeout(read(), TIMINGS.storeTimeout);",
+    "to": "const text = await read();"
+  },
+  {
+    "name": "getConfig retry removed",
+    "file": "src/handlers.js",
+    "from": "      timer = timers.setTimeout(() => tryStart(current), wait);",
+    "to": ""
+  },
+  {
+    "name": "stop: not marked stopped",
+    "file": "src/session.js",
+    "from": "    this.stopped = true;\n    this.app.timers.clearTimeout(this.timer);",
+    "to": "    this.app.timers.clearTimeout(this.timer);"
+  },
+  {
+    "name": "published not cleared on apply",
+    "file": "src/app.js",
+    "from": "    this.published.clear();\n",
+    "to": "\n"
+  },
+  {
+    "name": "deviceCreated does not forget",
+    "file": "src/app.js",
+    "from": "      if (key.startsWith(`${device?.external_id}:`)) this.published.delete(key);",
+    "to": ""
+  },
+  {
+    "name": "discovery drops created features",
+    "file": "src/devices.js",
+    "from": "    if (parsed?.mac === mac) letters.add(parsed.letter);",
+    "to": ""
+  },
+  {
+    "name": "other device: trackers kept",
+    "file": "src/session.js",
+    "from": "      this.trackers.door.reset();",
+    "to": ""
+  },
+  {
+    "name": "multicast host accepted",
+    "file": "src/config.js",
+    "from": "return a === 0 || a >= 224;",
+    "to": "return a === 0;"
+  },
+  {
+    "name": "open_seconds unbounded",
+    "file": "src/config.js",
+    "from": "return Math.min(max, Math.max(min, Math.floor(n)));",
+    "to": "return Math.floor(n);"
+  }
+]

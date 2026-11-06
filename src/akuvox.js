@@ -111,6 +111,8 @@ export function parseRelayStatus(data) {
  * Home Assistant integration reads them; an unknown type leaves them unknown.
  */
 export function relayTriggered(value, type) {
+  // Some firmwares wrap it: { "state": 1 } (as the reference reads it).
+  if (isObject(value)) return relayTriggered(own(value, 'state'), type);
   if (typeof value === 'string') {
     const text = value.trim().toLowerCase();
     if (text === 'open' || text === 'active') return true;

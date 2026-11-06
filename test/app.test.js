@@ -98,9 +98,14 @@ test('opening: identity read right before, automatic close, bounded duration, co
   const after = s.fake.requests.slice(before).filter((r) => r.authorized);
   assert.deepEqual(
     after.map((r) => `${r.method} ${r.path}`),
-    ['GET /api/system/info', 'POST /api/relay/trig', 'GET /api/relay/status'],
+    [
+      'GET /api/system/info',
+      'GET /api/config/get',
+      'POST /api/relay/trig',
+      'GET /api/relay/status',
+    ],
   );
-  assert.deepEqual(after[1].json, {
+  assert.deepEqual(after[2].json, {
     target: 'relay',
     action: 'trig',
     data: { num: 1, mode: 0, level: 0, delay: 30 },
@@ -684,7 +689,7 @@ test('a reading never runs beside a command (one connection at a time)', async (
   const trigAt = during.findIndex((r) => r.path === '/api/relay/trig');
   assert.deepEqual(
     during.slice(0, trigAt).map((r) => r.path),
-    ['/api/system/info'],
+    ['/api/system/info', '/api/config/get'],
   );
   assert.ok(
     during.every((r) => r.open === 1),
@@ -704,28 +709,42 @@ test('identity read again for a command more than 2 s after the previous one', a
   assert.equal(triggers(s.fake).length, 1);
 });
 
-test('opening: a relay configuration older than 10 minutes is read again; unreadable -> nothing sent', async (t) => {
+test('opening: mode and type read right before; manual, unknown, unreadable or refused -> nothing sent', async (t) => {
   const s = await setup(t);
   await s.ready();
-  s.session().relayConfig.at -= 11 * 60_000;
-  s.fake.config['Config.DoorSetting.RELAY.RelayAMode'] = '1';
-  assert.match((await press(s.gladys, 'a')).error, /mode manuel/);
-  s.session().relayConfig.at -= 11 * 60_000;
-  s.fake.config['Config.DoorSetting.RELAY.RelayAMode'] = '0';
-  s.fake.status['/api/config/get'] = 500;
-  assert.match((await press(s.gladys, 'a')).error, /configuration des relais illisible/);
+  const cases = [
+    [() => (s.fake.config['Config.DoorSetting.RELAY.RelayAMode'] = '1'), /mode manuel/],
+    [() => delete s.fake.config['Config.DoorSetting.RELAY.RelayAMode'], /mode du relais illisible/],
+    [
+      () => (s.fake.config['Config.DoorSetting.RELAY.RelayAType'] = '7'),
+      /mode du relais illisible/,
+    ],
+    [() => (s.fake.status['/api/config/get'] = 500), /configuration des relais illisible/],
+    [() => (s.fake.status['/api/config/get'] = 404), /mode du relais illisible/],
+    [() => (s.fake.status['/api/config/get'] = 403), /configuration des relais non autorisée/],
+    [() => (s.fake.status['/api/config/get'] = 401), /configuration des relais non autorisée/],
+  ];
+  for (const [change, error] of cases) {
+    const saved = { ...s.fake.config };
+    change();
+    const ack = await press(s.gladys, 'a');
+    assert.match(ack.error ?? '', error);
+    s.fake.config = saved;
+    delete s.fake.status['/api/config/get'];
+  }
   assert.equal(triggers(s.fake).length, 0);
+  assert.equal(s.session().state, 'ok', 'a 401 on the configuration is no credentials refusal');
+  assert.equal((await press(s.gladys, 'a')).success, true);
 });
 
-test('a device without the configuration API: integer states read as NO, level 0', async (t) => {
+test('a device without the configuration API: integer states read as NO; never opened (mode unknown)', async (t) => {
   const s = await setup(t);
   s.fake.status['/api/config/get'] = 404;
   s.fake.relays = { RelayA: 0 };
-  s.fake.releaseOnTrigger = false;
   await s.ready();
   assert.equal(s.gladys.fake.lastState(F('relay-a:state')), 1);
-  await press(s.gladys, 'a');
-  assert.equal(triggers(s.fake)[0].json.data.level, 0);
+  assert.match((await press(s.gladys, 'a')).error, /mode du relais illisible/);
+  assert.equal(triggers(s.fake).length, 0);
 });
 
 test('a relay already released before the opening is never reported confirmed by it', async (t) => {
@@ -747,11 +766,14 @@ test('an unreachable device is tried again after 10 s, 20 s, 40 s… at most 5 m
   let last = tries();
   for (let ms = 0; ms <= 1_200_000; ms += 1000) {
     await s.advance(1000);
-    if (s.pending.size && tries() !== last) {
+    if (s.pending.size === 0 || [...s.pending.values()].some((p) => p.at <= s.clock.now)) {
+      await until(() => s.session().timer !== undefined, 2000);
+    }
+    await sleep(1);
+    if (tries() !== last) {
       last = tries();
       at.push(ms + 1000);
     }
-    if (ms % 10_000 === 0) await sleep(2);
   }
   const gaps = at.slice(1).map((v, i) => v - at[i]);
   assert.deepEqual(gaps.slice(0, 6), [10_000, 20_000, 40_000, 80_000, 160_000, 300_000]);
@@ -803,4 +825,232 @@ test('an invalid address is counted in the status, never shown back', async (t) 
   });
   await until(() => /ignorée/.test(s.gladys.fake.connectionStatus.message.fr));
   assert.ok(!JSON.stringify(s.gladys.fake.connectionStatuses).includes('evil'));
+});
+
+// --- review r1 ----------------------------------------------------------------
+
+test('401/403 on a log or the configuration: "not allowed" for it alone, never a refusal; relays read on', async (t) => {
+  const s = await setup(t, { config: { poll_interval: 5 } });
+  await s.ready();
+  s.fake.status['/api/calllog/get'] = 401;
+  s.fake.status['/api/doorlog/get'] = 403;
+  await cycle(s, 0, 5000);
+  assert.equal(s.session().state, 'ok');
+  assert.match(s.gladys.fake.connectionStatus.message.fr, /journal des appels non autorisé/);
+  assert.match(s.gladys.fake.connectionStatus.message.fr, /journal des portes non autorisé/);
+  const relays = () => s.fake.count('GET', '/api/relay/status');
+  const logs = () => s.fake.count('GET', '/api/doorlog/get');
+  const [r0, l0] = [relays(), logs()];
+  for (let i = 0; i < 10; i += 1) await cycle(s, 0, 5000);
+  assert.ok(relays() >= r0 + 10, 'the relays are read at every interval');
+  assert.equal(logs(), l0, 'the refused log waits 1 minute');
+  await cycle(s, 0, 5000);
+  await cycle(s, 0, 5000);
+  assert.equal(logs(), l0 + 1, 'asked again after 1 minute');
+  assert.deepEqual(s.store.data.refused, {});
+  // The configuration refused in a cycle: relays still read.
+  delete s.fake.status['/api/calllog/get'];
+  delete s.fake.status['/api/doorlog/get'];
+  s.fake.status['/api/config/get'] = 401;
+  s.session().relayConfig.at -= 11 * 60_000;
+  await cycle(s, 0, 5000);
+  assert.equal(s.session().state, 'ok');
+  assert.match(s.gladys.fake.connectionStatus.message.fr, /configuration non autorisée/);
+  assert.deepEqual(s.store.data.refused, {});
+});
+
+for (const interval of [60, 300]) {
+  test(`own opening at a ${interval} s interval: its log entry is no event, a badge right after is`, async (t) => {
+    const s = await setup(t, { config: { poll_interval: interval } });
+    s.fake.doorLog = [doorEntry(1)];
+    await s.ready();
+    assert.equal((await press(s.gladys, 'a')).success, true);
+    s.fake.doorLog.unshift(doorEntry(2, { Type: 'HTTP', Name: '' }));
+    s.fake.doorLog.unshift(doorEntry(3, { Type: 'Card', Name: 'Bob' }));
+    await cycle(s, 0, interval * 1000);
+    assert.deepEqual(
+      s.gladys.fake.sceneEvents.map((e) => e.data.user),
+      ['Bob'],
+      'the badge is published, the opening by Gladys is not',
+    );
+  });
+}
+
+test('own opening: kept across a failed door log reading; dropped after two readings without it', async (t) => {
+  const s = await setup(t);
+  s.fake.doorLog = [doorEntry(1)];
+  await s.ready();
+  await press(s.gladys, 'a');
+  s.fake.status['/api/doorlog/get'] = 500;
+  await cycle(s);
+  delete s.fake.status['/api/doorlog/get'];
+  s.fake.doorLog.unshift(doorEntry(2, { Type: 'HTTP', Name: '' }));
+  await cycle(s);
+  assert.equal(s.gladys.fake.sceneEvents.length, 0);
+  // Another opening whose entry never comes: after two readings, a later
+  // remote opening is an event again.
+  await press(s.gladys, 'a');
+  await cycle(s);
+  await cycle(s);
+  assert.equal(s.session().ownOpens.length, 0);
+  s.fake.doorLog.unshift(doorEntry(3, { Type: 'Remote', Name: '' }));
+  await cycle(s);
+  assert.equal(s.gladys.fake.sceneEvents.length, 1);
+});
+
+test('own opening sent without an answer: its log entry is no event either', async (t) => {
+  const s = await setup(t);
+  s.fake.doorLog = [doorEntry(1)];
+  await s.ready();
+  s.fake.silent.add('/api/relay/trig');
+  assert.match((await press(s.gladys, 'a')).error, /envoyée, sans réponse/);
+  s.fake.silent.delete('/api/relay/trig');
+  s.fake.doorLog.unshift(doorEntry(2, { Type: 'HTTP', Name: '' }));
+  await cycle(s);
+  assert.equal(s.gladys.fake.sceneEvents.length, 0);
+});
+
+test('trigger written, then the connection cut: "maybe opened", never "nothing sent"', async (t) => {
+  const s = await setup(t);
+  await s.ready();
+  s.fake.drop.add('/api/relay/trig');
+  const ack = await press(s.gladys, 'a');
+  assert.match(ack.error, /envoyée, sans réponse/);
+  assert.equal(triggers(s.fake).length, 1);
+});
+
+test('credentials refused during an opening: no automatic try afterwards, the queued one sends nothing', async (t) => {
+  const s = await setup(t, { config: { poll_interval: 5 } });
+  await s.ready();
+  s.fake.password = 'changed-on-the-device';
+  s.fake.latency['/api/system/info'] = 100;
+  const from = s.fake.requests.length;
+  const [a, b] = await Promise.all([press(s.gladys, 'a'), press(s.gladys, 'b')]);
+  assert.equal(s.fake.requests.length - from, 1, 'the queued one sent nothing at all');
+  assert.match(a.error, /identifiants refusés/);
+  assert.match(b.error, /identifiants refusés/);
+  const count = s.fake.requests.length;
+  for (let i = 0; i < 10; i += 1) await s.step(5000);
+  await sleep(50);
+  assert.equal(s.fake.requests.length, count, 'not one more request');
+  assert.equal(triggers(s.fake).length, 0);
+});
+
+test('the 403 wait doubles up to 1 hour, never beyond', async (t) => {
+  const s = await setup(t);
+  await s.ready();
+  const waits = Array.from({ length: 9 }, () => s.session().readFailed({ kind: 'forbidden' }));
+  assert.deepEqual(waits, [60e3, 120e3, 240e3, 480e3, 960e3, 1920e3, 3600e3, 3600e3, 3600e3]);
+});
+
+test('the deadline passed while reading the configuration: "too late", no trigger, no connection', async (t) => {
+  const fake = await startFakeAkuvox();
+  const s = await setup(t, { fakes: [fake], start: false });
+  s.app.request = async (options) => {
+    const answer = await realRequest(options);
+    if (
+      options.path === '/api/config/get' &&
+      options.signal === s.session().stopController.signal
+    ) {
+      s.clock.now += 3250; // 50 ms left
+    }
+    return answer;
+  };
+  await within(s.gladys.connect(), 5000);
+  await s.ready();
+  const connections = fake.connections;
+  const ack = await press(s.gladys, 'a');
+  assert.match(ack.error, /délai dépassé/);
+  await sleep(50);
+  assert.equal(triggers(fake).length, 0);
+  assert.equal(fake.connections, connections + 2, 'identity and configuration only');
+});
+
+test('the option unchecked while Discovery is slow applies at once', async (t) => {
+  const s = await setup(t);
+  await s.ready();
+  let release;
+  s.gladys.publishDiscoveredDevices = () => new Promise((resolve) => (release = resolve));
+  t.after(() => release?.());
+  await within(s.gladys.fake.configUpdated({ ...s.gladys.fake.config, poll_interval: 20 }), 3000);
+  await within(s.gladys.fake.configUpdated({ ...s.gladys.fake.config, allow_open: false }), 3000);
+  const ack = await press(s.gladys, 'a');
+  assert.match(ack.error, /ouverture désactivée/);
+  assert.equal(triggers(s.fake).length, 0);
+});
+
+test('a refusal kept from before a restart: saving the configuration tries once more', async (t) => {
+  const store = new MemoryStore();
+  const fake = await startFakeAkuvox();
+  const first = await setup(t, { fakes: [fake], store, config: { password: 'wrong' } });
+  await first.step(0);
+  await until(() => Object.keys(store.data.refused).length === 1);
+  await first.app.stop();
+  // The password fixed on the device meanwhile: same fingerprint, refused at start.
+  fake.password = 'wrong';
+  const s = await setup(t, { fakes: [fake], store, config: { password: 'wrong' } });
+  await s.step(0);
+  assert.equal(s.session().state, 'refused');
+  await s.gladys.fake.configUpdated({ ...s.gladys.fake.config });
+  await s.ready();
+  await until(() => Object.keys(store.data.refused).length === 0);
+});
+
+test('the true cause of a refused opening: 403, Basic asked', async (t) => {
+  const s = await setup(t);
+  await s.ready();
+  s.fake.status['/api/system/info'] = 403;
+  assert.match((await press(s.gladys, 'a')).error, /accès refusé par l’appareil \(403\)/);
+  delete s.fake.status['/api/system/info'];
+  s.fake.auth = 'basic';
+  s.session().digest.challenge = undefined;
+  assert.match((await press(s.gladys, 'a')).error, /demande Basic/);
+  assert.equal(triggers(s.fake).length, 0);
+});
+
+test('own opening whose entry shows one reading late: still no event', async (t) => {
+  const s = await setup(t);
+  s.fake.doorLog = [doorEntry(1)];
+  await s.ready();
+  await press(s.gladys, 'a');
+  await cycle(s);
+  s.fake.doorLog.unshift(doorEntry(2, { Type: 'HTTP', Name: '' }));
+  await cycle(s);
+  assert.equal(s.gladys.fake.sceneEvents.length, 0);
+});
+
+test('the deadline passed while reading the identity: "too late", the configuration not even read', async (t) => {
+  const fake = await startFakeAkuvox();
+  const s = await setup(t, { fakes: [fake], start: false });
+  s.app.request = async (options) => {
+    const answer = await realRequest(options);
+    if (
+      options.path === '/api/system/info' &&
+      options.signal === s.session().stopController.signal
+    ) {
+      s.clock.now += 3250;
+    }
+    return answer;
+  };
+  await within(s.gladys.connect(), 5000);
+  await s.ready();
+  const configs = fake.count('GET', '/api/config/get');
+  const ack = await press(s.gladys, 'a');
+  assert.match(ack.error, /délai dépassé/);
+  await sleep(50);
+  assert.equal(fake.count('GET', '/api/config/get'), configs);
+  assert.equal(triggers(fake).length, 0);
+});
+
+test('own opening the device did not log: a badge right after on that relay is still published', async (t) => {
+  const s = await setup(t);
+  s.fake.doorLog = [doorEntry(1)];
+  await s.ready();
+  await press(s.gladys, 'a');
+  s.fake.doorLog.unshift(doorEntry(2, { Type: 'Card', Name: 'Dave' }));
+  await cycle(s);
+  assert.deepEqual(
+    s.gladys.fake.sceneEvents.map((e) => e.data.user),
+    ['Dave'],
+  );
 });

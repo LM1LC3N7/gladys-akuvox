@@ -31,7 +31,8 @@ Dans la page web de chaque appareil (son adresse IP dans un navigateur) :
    Gladys à la liste.
 2. Donnez à l'appareil une **adresse IP fixe** dans votre box.
 3. Les relais doivent être en mode **automatique** (fermeture après un délai), le réglage par défaut. Un
-   relais en mode manuel (bistable) n'est pas ouvert par l'intégration.
+   relais en mode manuel (bistable), ou dont le mode ne peut pas être lu, n'est jamais ouvert par
+   l'intégration.
 
 ## Configuration
 
@@ -53,7 +54,8 @@ appareil).
 - Désactivée par défaut ; l'option est relue juste avant l'envoi : décochée pendant qu'une ouverture
   attend l'appareil, rien ne part.
 - Juste avant chaque ouverture, l'intégration relit l'identité de l'appareil (son adresse MAC) : si un autre
-  appareil répond à cette adresse, rien n'est envoyé.
+  appareil répond à cette adresse, rien n'est envoyé. Elle relit aussi la configuration du relais : seul un
+  relais en mode automatique, de type connu, est ouvert.
 - Une ouverture n'est **jamais renvoyée** par l'intégration, ni réessayée, ni rejouée après un redémarrage.
 - Une ouverture passe devant les lectures : une lecture lente est abandonnée, jamais attendue.
 - Le résultat est dans le statut : « ouvert, confirmé » seulement si le relais, au repos avant, est relu
@@ -62,17 +64,20 @@ appareil).
 - Il n'y a pas de commande de fermeture : le relais se referme seul (mode automatique de l'API).
 
 Les refus d'une ouverture avant tout envoi : option décochée, identifiants refusés, appareil inconnu ou
-pas encore lu, autre appareil à l'adresse, identité illisible, appareil injoignable, configuration des
-relais illisible, relais en mode manuel, relais absent, trop de commandes en attente (4 par appareil),
+pas encore lu, autre appareil à l'adresse, identité illisible, accès refusé par l'appareil (403), Basic
+demandé alors que Digest est choisie, appareil injoignable, configuration des relais illisible ou non
+autorisée, mode du relais illisible, relais en mode manuel, relais absent, trop de commandes en attente (4 par appareil),
 délai de 3,3 s dépassé avant l'envoi, intégration arrêtée ou reconfigurée.
 
 ## Identifiants refusés
 
 Un appareil qui refuse l'utilisateur ou le mot de passe n'est plus sollicité (certains bloquent leur API
 après plusieurs échecs) : le statut le dit, et cela tient après un redémarrage. L'intégration réessaie dès
-que vous changez les identifiants ou cliquez sur « Tester la connexion » (un essai par clic). Un refus
-d'accès 403 (adresse non autorisée) n'est pas un refus d'identifiants : il est réessayé après 1 minute,
-puis 2, 4… jusqu'à une heure.
+que vous changez les identifiants, enregistrez la configuration ou cliquez sur « Tester la connexion » (un
+essai à chaque fois). Un refus d'accès 403 (adresse non autorisée) n'est pas un refus d'identifiants : il
+est réessayé après 1 minute, puis 2, 4… jusqu'à une heure. Un 401 ou 403 sur un journal ou sur la
+configuration seulement ne compte pas non plus : cette lecture est mise de côté (même espacement), le
+statut le dit, et les relais continuent d'être lus.
 
 ## Événements : ce qu'il faut savoir
 
@@ -81,7 +86,9 @@ puis 2, 4… jusqu'à une heure.
   ou si le journal a été vidé, les entrées déjà là ne sont pas publiées. L'heure du journal est celle de
   l'appareil, que l'intégration ne peut pas comparer à la sienne : elle ne publie rien de périmé.
 - L'entrée qu'une ouverture depuis Gladys laisse dans le journal n'est pas un événement « porte ouverte »
-  (une scène qui ouvre la porte sur cet événement tournerait en boucle).
+  (une scène qui ouvre la porte sur cet événement tournerait en boucle), quel que soit l'intervalle : la
+  marque vit jusqu'à deux lectures du journal après l'ouverture (30 minutes au plus). Une entrée avec un
+  code, un badge, un visage… n'est jamais prise pour elle : quelqu'un à la porte est toujours publié.
 - Au plus 5 nouvelles entrées par journal et par lecture (les plus récentes), 200 événements par minute.
 - Le journal lu est la première page renvoyée par l'appareil : si votre modèle renvoie les plus anciennes
   en premier, dites-le dans le sujet du forum.

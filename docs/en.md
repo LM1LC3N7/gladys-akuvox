@@ -29,7 +29,7 @@ In the web page of each device (its IP address in a browser):
    Gladys to the list.
 2. Give the device a **fixed IP address** in your router.
 3. The relays must be in **automatic** mode (close after a delay), the default. A relay in manual
-   (bistable) mode is not opened by the integration.
+   (bistable) mode, or whose mode cannot be read, is never opened by the integration.
 
 ## Configuration
 
@@ -50,7 +50,8 @@ The **Test the connection** button reads the identity of each device (at most on
 - Off by default; the option is read again right before sending: unchecked while an opening waits for the
   device, nothing leaves.
 - Right before each opening, the integration reads the identity of the device again (its MAC address): if
-  another device answers at this address, nothing is sent.
+  another device answers at this address, nothing is sent. It also reads the relay configuration again:
+  only a relay in automatic mode, of a known type, is opened.
 - An opening is **never sent again** by the integration, never retried, never replayed after a restart.
 - An opening goes before the readings: a slow reading is dropped, never waited for.
 - The result is in the status: "opened, confirmed" only when the relay, at rest before, is read released
@@ -59,16 +60,19 @@ The **Test the connection** button reads the identity of each device (at most on
 - There is no closing command: the relay closes by itself (automatic mode of the API).
 
 Refusals of an opening before anything is sent: option unchecked, credentials refused, device unknown or
-not read yet, another device at the address, identity unreadable, device unreachable, relay configuration
-unreadable, relay in manual mode, relay not on the device, too many commands waiting (4 per device), the
+not read yet, another device at the address, identity unreadable, access refused by the device (403),
+Basic asked while Digest is chosen, device unreachable, relay configuration unreadable or not allowed,
+relay mode unreadable, relay in manual mode, relay not on the device, too many commands waiting (4 per device), the
 3.3 s deadline passed before sending, integration stopped or reconfigured.
 
 ## Refused credentials
 
 A device that refuses the user or the password is not asked again (some lock their API after a few
 failures): the status says so, and it holds across a restart. The integration tries again as soon as you
-change the credentials or click "Test the connection" (one try per click). A 403 (address not allowed) is
-not a credentials refusal: it is tried again after 1 minute, then 2, 4… up to one hour.
+change the credentials, save the configuration or click "Test the connection" (one try each time). A 403
+(address not allowed) is not a credentials refusal: it is tried again after 1 minute, then 2, 4… up to one
+hour. A 401 or 403 on a log or on the configuration only does not count either: that reading is set aside
+(same spacing), the status says so, and the relays are still read.
 
 ## Events: what to know
 
@@ -77,7 +81,9 @@ not a credentials refusal: it is tried again after 1 minute, then 2, 4… up to 
   already there are not published. The time of the log is the device's own, which the integration cannot
   compare with its clock: it publishes nothing stale.
 - The entry an opening from Gladys leaves in the log is not a "door opened" event (a scene opening the
-  door on that event would loop).
+  door on that event would loop), whatever the interval: the mark lives until two readings of the log after
+  the opening (30 minutes at most). An entry with a code, a card, a face… is never taken for it: someone at
+  the door is always published.
 - At most 5 new entries per log and per reading (the newest), 200 events per minute.
 - The log read is the first page the device returns: if your model returns the oldest first, say so in the
   forum topic.

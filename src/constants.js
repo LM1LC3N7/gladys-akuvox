@@ -44,8 +44,8 @@ export const TIMINGS = Object.freeze({
   /** A log not read for longer than this: read again as a new baseline (nothing published). */
   logGapFactor: 3,
   logGapMin: 120_000,
-  /** An opening from Gladys: the door log entry it makes, within this, is not an event. */
-  ownOpenWindow: 30_000,
+  /** An opening from Gladys: its door log entry is not an event, until two readings went by or this. */
+  ownOpenMax: 30 * 60_000,
   /** The test button: once per address every this. */
   testEvery: 5000,
   /** getConfig() failed: tried again after these delays (the last one repeats). */
@@ -70,6 +70,8 @@ export const LIMITS = Object.freeze({
   /** Scene events and states per minute, for the whole integration (Gladys: 300). */
   eventsPerMinute: 200,
   statesPerMinute: 250,
+  /** Openings from Gladys remembered per device (their door log entry is no event). */
+  ownOpens: 8,
   /** Waiting commands per device. */
   commandQueue: 4,
   /** A text of the device (name, method) published at most this long. */

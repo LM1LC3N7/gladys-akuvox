@@ -45,7 +45,7 @@ export function registerHandlers(gladys, app, logger, timers = globalThis) {
   gladys.onDeviceDeleted((device) => app.deviceDeleted(device));
   gladys.onSetValue((device, feature, value) => app.setValue(device, feature, value));
   gladys.onAction(ACTIONS.TEST, () => app.testConnection());
-  gladys.onConfigUpdated((config) => app.start(config));
+  gladys.onConfigUpdated((config) => app.start(config, { saved: true }));
   const onConnected = startOnConnect(gladys, app, logger, timers);
   gladys.on('connected', () => onConnected());
 }

@@ -56,13 +56,13 @@ export class AkuvoxApp {
   // --- lifecycle -------------------------------------------------------------
 
   /** A configuration (start, save, reconnection): applied one at a time, the last one wins. */
-  start(raw) {
-    const run = this.chain.then(() => this.apply(raw));
+  start(raw, { saved = false } = {}) {
+    const run = this.chain.then(() => this.apply(raw, saved));
     this.chain = run.catch(() => {});
     return run;
   }
 
-  async apply(raw) {
+  async apply(raw, saved = false) {
     if (this.stopped) return;
     if (!this.data) {
       const { data, state } = await this.store.load();
@@ -74,8 +74,10 @@ export class AkuvoxApp {
     const previous = this.config;
     this.config = next;
     const credentialsChanged = previous && credentialsOf(previous) !== credentialsOf(next);
-    if (credentialsChanged && Object.keys(this.data.refused).length) {
-      // New credentials: tried again everywhere.
+    if ((credentialsChanged || saved) && Object.keys(this.data.refused).length) {
+      // New credentials, or the configuration saved by the user (a changed
+      // password may share the 8-bit fingerprint of the refused one): tried
+      // again everywhere, once.
       this.data.refused = {};
       this.persist();
     }
@@ -89,7 +91,15 @@ export class AkuvoxApp {
       }
     }
     for (const [key, host] of wanted) {
-      if (this.sessions.has(key)) continue;
+      const existing = this.sessions.get(key);
+      if (existing) {
+        // A refusal lifted by this configuration: tried again, once.
+        if (existing.state === 'refused' && !this.isRefused(existing)) {
+          existing.state = 'starting';
+          existing.begin(0);
+        }
+        continue;
+      }
       const session = new Session(this, host);
       this.sessions.set(key, session);
       if (this.isRefused(session)) session.state = 'refused';
@@ -100,7 +110,9 @@ export class AkuvoxApp {
     this.gladys.forgetPublishedStates?.();
     this.lastStatus = undefined;
     this.refreshStatus();
-    await this.scan();
+    // Never awaited: a slow Discovery never holds the next configuration (an
+    // option unchecked meanwhile applies at once).
+    this.scan();
   }
 
   async stop() {
@@ -286,7 +298,12 @@ export class AkuvoxApp {
       case 'ok': {
         line = T.ok(key, session.identity?.model ?? 'Akuvox', session.relays.size);
         const extras = [];
-        if (session.logState.door !== 'ok' || session.logState.call !== 'ok') {
+        if (session.configState === 'unauthorized') extras.push(T.configUnauthorized);
+        for (const kind of ['door', 'call']) {
+          if (session.logState[kind] === 'unauthorized') extras.push(T.logUnauthorized(kind));
+        }
+        const other = (kind) => !['ok', 'unauthorized'].includes(session.logState[kind]);
+        if (other('door') || other('call')) {
           const unsupported =
             session.logState.door === 'unsupported' && session.logState.call === 'unsupported';
           extras.push(unsupported ? T.noLogs : T.logsUnread);

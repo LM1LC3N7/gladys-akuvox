@@ -108,6 +108,24 @@ export const T = {
     'relay in manual (bistable) mode on the device: not supported',
   ),
   configNotRead: t('configuration des relais illisible', 'relay configuration unreadable'),
+  modeUnknown: t(
+    'mode du relais illisible (seul le mode automatique est ouvert)',
+    'relay mode unreadable (only the automatic mode is opened)',
+  ),
+  configForbidden: t(
+    'configuration des relais non autorisée par l’appareil',
+    'relay configuration not allowed by the device',
+  ),
+  forbiddenReason: t('accès refusé par l’appareil (403)', 'access refused by the device (403)'),
+  basicOnlyReason: t(
+    'l’appareil demande Basic alors que Digest est choisie',
+    'the device asks for Basic while Digest is chosen',
+  ),
+  configUnauthorized: t('configuration non autorisée', 'configuration not allowed'),
+  logUnauthorized: (kind) =>
+    kind === 'door'
+      ? t('journal des portes non autorisé', 'door log not allowed')
+      : t('journal des appels non autorisé', 'call log not allowed'),
   unknownRelay: t('relais absent de l’appareil', 'relay not on the device'),
   queueFull: t('trop de commandes en attente', 'too many commands waiting'),
   tooLate: t('délai dépassé avant l’envoi', 'deadline passed before sending'),

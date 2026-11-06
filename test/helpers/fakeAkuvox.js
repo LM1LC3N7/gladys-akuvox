@@ -52,6 +52,7 @@ export async function startFakeAkuvox(options = {}) {
     callLog: [],
     latency: {},
     silent: new Set(),
+    drop: new Set(),
     status: {},
     retcode: {},
     body: {},
@@ -150,6 +151,12 @@ export async function startFakeAkuvox(options = {}) {
         open: fake.openSockets.size,
       });
       if (fake.silent.has(path)) return; // never answers
+      if (fake.drop.has(path)) {
+        // Received (and acted on), then the connection is cut without an answer.
+        if (path === '/api/relay/trig') answer(path, json);
+        req.socket.destroy();
+        return;
+      }
       // The answer is what the device holds when the request ARRIVES (a slow
       // answer carries an old state), the trigger acts at once.
       const text =

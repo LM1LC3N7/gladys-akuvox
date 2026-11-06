@@ -39,5 +39,8 @@
 - Indoor monitors (IT83): opening through `/fcgi/do?action=OpenDoor` with its own credentials.
 - Action URL events pushed by the device (a receiver with bounded size, connections and time).
 - Confirm on a real device: log page order, call log timing, relay state values (strings, integers,
-  `{ state }` objects), whether an opening through the API writes a door log entry.
+  `{ state }` objects), whether an opening through the API writes a door log entry, and when (before or
+  after the relay closes again: it decides the two-readings rule of own openings), the duration of
+  `/api/config/get` (read before every opening, 1.5 s at most), the methods written in the door log (the
+  whole-word credential list of `src/session.js` is to complete).
 - Mutation check of the guards: `memcap node scripts/mutants.mjs` (scripts/mutants.json).

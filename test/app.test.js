@@ -1054,3 +1054,114 @@ test('own opening the device did not log: a badge right after on that relay is s
     ['Dave'],
   );
 });
+
+// --- review r2 ----------------------------------------------------------------
+
+test('configuration refused (401): not asked again before 1 minute, then asked; relays read meanwhile', async (t) => {
+  const s = await setup(t, { config: { poll_interval: 5 } });
+  await s.ready();
+  s.fake.status['/api/config/get'] = 401;
+  s.session().relayConfig.at -= 11 * 60_000;
+  const configs = () => s.fake.count('GET', '/api/config/get');
+  const c0 = configs();
+  const r0 = s.fake.count('GET', '/api/relay/status');
+  for (let i = 0; i < 8; i += 1) await cycle(s, 0, 5000);
+  assert.equal(configs(), c0 + 1, 'once in 40 s');
+  assert.ok(s.fake.count('GET', '/api/relay/status') >= r0 + 8);
+  for (let i = 0; i < 3; i += 1) await cycle(s, 0, 5000);
+  assert.equal(configs(), c0 + 1, 'still not at 55 s');
+  for (let i = 0; i < 2; i += 1) await cycle(s, 0, 5000);
+  assert.equal(configs(), c0 + 2, 'asked again after 1 minute');
+});
+
+test('a reconnection to Gladys never tries refused credentials again', async (t) => {
+  const s = await setup(t, { config: { password: 'wrong' } });
+  await s.step(0);
+  await until(() => s.session().state === 'refused');
+  const count = s.fake.requests.length;
+  s.gladys.emit('connected');
+  await until(() => s.app.published.size === 0);
+  for (let i = 0; i < 3; i += 1) await s.step(10_000);
+  await sleep(50);
+  assert.equal(s.fake.requests.length, count);
+  assert.equal(s.session().state, 'refused');
+});
+
+test('a refused endpoint read again with success: its next refusal waits 1 minute again', async (t) => {
+  const s = await setup(t, { config: { poll_interval: 5 } });
+  await s.ready();
+  s.fake.status['/api/doorlog/get'] = 403;
+  await cycle(s, 0, 5000);
+  assert.equal(s.session().logWait.door, 60_000);
+  delete s.fake.status['/api/doorlog/get'];
+  for (let i = 0; i < 12; i += 1) await cycle(s, 0, 5000);
+  assert.equal(s.session().logState.door, 'ok');
+  s.fake.status['/api/doorlog/get'] = 403;
+  await cycle(s, 0, 5000);
+  assert.equal(s.session().logWait.door, 60_000, 'not 2 minutes');
+  // Same for the configuration.
+  s.fake.status['/api/config/get'] = 403;
+  s.session().relayConfig.at -= 11 * 60_000;
+  await cycle(s, 0, 5000);
+  assert.equal(s.session().configWait, 60_000);
+  delete s.fake.status['/api/config/get'];
+  for (let i = 0; i < 12; i += 1) await cycle(s, 0, 5000);
+  assert.equal(s.session().configState, 'ok');
+  s.fake.status['/api/config/get'] = 403;
+  s.session().relayConfig.at -= 11 * 60_000;
+  await cycle(s, 0, 5000);
+  assert.equal(s.session().configWait, 60_000, 'not 2 minutes');
+});
+
+test('own opening marks: 8 at most', async (t) => {
+  const s = await setup(t);
+  await s.ready();
+  for (let i = 0; i < 12; i += 1) s.session().markOwnOpen('a', i);
+  assert.equal(s.session().ownOpens.length, 8);
+  assert.equal(s.session().ownOpens[0].at, 4, 'the oldest go first');
+});
+
+test('own opening mark older than 30 minutes (log unreadable meanwhile): no longer swallows an entry', async (t) => {
+  const s = await setup(t, { config: { poll_interval: 300 } });
+  s.fake.doorLog = [doorEntry(1)];
+  await s.ready();
+  await press(s.gladys, 'a');
+  s.fake.status['/api/doorlog/get'] = 500;
+  for (let i = 0; i < 7; i += 1) await cycle(s, 0, 300_000);
+  delete s.fake.status['/api/doorlog/get'];
+  // 35 minutes later: the log is read again as a baseline (long gap), the mark dropped by its age.
+  await cycle(s, 0, 300_000);
+  assert.equal(s.session().ownOpens.length, 0);
+  s.fake.doorLog.unshift(doorEntry(2, { Type: 'Remote', Name: '' }));
+  await cycle(s, 0, 300_000);
+  assert.equal(s.gladys.fake.sceneEvents.length, 1);
+});
+
+test('stopped while an opening reads the configuration: "integration stopped", nothing sent', async (t) => {
+  const s = await setup(t);
+  await s.ready();
+  s.fake.latency['/api/config/get'] = 300;
+  const pending = press(s.gladys, 'a');
+  await until(() => s.fake.requests.at(-1).path === '/api/config/get');
+  await s.app.stop();
+  const ack = await pending;
+  assert.match(ack.error, /intégration arrêtée/);
+  await sleep(50);
+  assert.equal(triggers(s.fake).length, 0);
+});
+
+test('own opening mark past 30 minutes at the reading that brings its entry: the entry is an event', async (t) => {
+  const s = await setup(t, { config: { poll_interval: 300 } });
+  s.fake.doorLog = [doorEntry(1)];
+  await s.ready();
+  await s.advance(1000); // the opening 1 s after the reading
+  await press(s.gladys, 'a');
+  s.fake.status['/api/doorlog/get'] = 500;
+  for (let i = 0; i < 5; i += 1) await cycle(s, 0, i === 0 ? 299_000 : 300_000);
+  delete s.fake.status['/api/doorlog/get'];
+  await cycle(s, 0, 300_000); // 30 min: a baseline, the mark still young enough
+  assert.equal(s.session().ownOpens.length, 1);
+  s.fake.doorLog.unshift(doorEntry(2, { Type: 'Remote', Name: '' }));
+  await cycle(s, 0, 300_000); // 35 min
+  assert.equal(s.gladys.fake.sceneEvents.length, 1);
+});

@@ -95,6 +95,9 @@ statut le dit, et les relais continuent d'être lus.
 
 ## Limites connues
 
+- Un appareil sans API de configuration (`/api/config/get`), ou dont l'utilisateur de l'API ne peut pas la
+  lire, n'ouvre jamais : le mode de ses relais ne peut pas être vérifié. Le statut et la réponse de la
+  commande le disent. Il en va de même si l'appareil met plus de 1,5 s à la renvoyer.
 - Pas encore pris en charge : HTTPS, les moniteurs intérieurs (IT83, ouverture par `/fcgi/do`), les relais
   en mode manuel, les événements poussés par l'appareil (Action URL).
 - Données personnelles : le nom de l'utilisateur d'un accès est transmis à vos scènes Gladys, jamais

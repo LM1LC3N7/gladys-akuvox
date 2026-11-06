@@ -90,6 +90,9 @@ hour. A 401 or 403 on a log or on the configuration only does not count either: 
 
 ## Known limits
 
+- A device without the configuration API (`/api/config/get`), or whose API user cannot read it, never
+  opens: the mode of its relays cannot be checked. The status and the answer to the command say so. The
+  same goes if the device takes more than 1.5 s to send it.
 - Not supported yet: HTTPS, indoor monitors (IT83, opening through `/fcgi/do`), relays in manual mode,
   events pushed by the device (Action URL).
 - Personal data: the user name of an access goes to your Gladys scenes, nowhere else, never into the

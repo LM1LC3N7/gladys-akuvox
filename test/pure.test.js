@@ -21,6 +21,7 @@ import {
 } from '../src/akuvox.js';
 import { LIMITS } from '../src/constants.js';
 import { LogTracker, RateLimiter } from '../src/events.js';
+import { CREDENTIAL } from '../src/session.js';
 
 const ok = (data, extra = {}) => ({
   status: 200,
@@ -310,4 +311,39 @@ test('rate limiter: a sliding minute', () => {
   assert.equal(limiter.take(3), false);
   assert.equal(limiter.take(59_999), false);
   assert.equal(limiter.take(60_000), true);
+});
+
+test('credential methods: whole words only', () => {
+  for (const method of [
+    'PIN',
+    'Private PIN',
+    'Card',
+    'RF Card',
+    'RFID',
+    'Face',
+    'Fingerprint',
+    'QR Code',
+    'NFC',
+    'BLE',
+    'Bluetooth',
+    'License Plate',
+    'Password',
+    'Temp Key',
+    'TempKey',
+  ]) {
+    assert.match(method, CREDENTIAL, method);
+  }
+  for (const method of [
+    'HTTP',
+    'Remote',
+    'Interface',
+    'Cable',
+    'Button',
+    'Exit',
+    'API',
+    'Call',
+    '',
+  ]) {
+    assert.doesNotMatch(method, CREDENTIAL, method);
+  }
 });

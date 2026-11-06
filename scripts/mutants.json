@@ -400,5 +400,71 @@
     "file": "src/config.js",
     "from": "return Math.min(max, Math.max(min, Math.floor(n)));",
     "to": "return Math.floor(n);"
+  },
+  {
+    "name": "r2 A1: own marks without a ceiling",
+    "file": "src/session.js",
+    "from": "if (this.ownOpens.length > LIMITS.ownOpens) this.ownOpens.shift();",
+    "to": ""
+  },
+  {
+    "name": "r2 A3: refused configuration asked every cycle",
+    "file": "src/session.js",
+    "from": "      this.configRecheck <= mono &&\n",
+    "to": ""
+  },
+  {
+    "name": "r2 A4: log wait not reset after a success",
+    "file": "src/session.js",
+    "from": "    this.logWait[kind] = undefined;\n    if (this.logState[kind] !== 'ok') {",
+    "to": "    if (this.logState[kind] !== 'ok') {"
+  },
+  {
+    "name": "r2 A5: configuration wait not reset after a success",
+    "file": "src/session.js",
+    "from": "        this.setConfigState('ok');\n        this.configWait = undefined;",
+    "to": "        this.setConfigState('ok');"
+  },
+  {
+    "name": "r2 A6: own mark without an age ceiling",
+    "file": "src/session.js",
+    "from": "(o) => o.reads < 2 && this.mono - o.at <= this.app.timings.ownOpenMax,",
+    "to": "(o) => o.reads < 2,"
+  },
+  {
+    "name": "r2: own mark age not checked when consumed",
+    "file": "src/session.js",
+    "from": "        mono - o.at <= this.app.timings.ownOpenMax &&\n",
+    "to": ""
+  },
+  {
+    "name": "r2 A7: refused log asked every cycle",
+    "file": "src/session.js",
+    "from": "if (this.logRecheck[kind] > mono) return;",
+    "to": ""
+  },
+  {
+    "name": "r2 A8: stop during the configuration said unreadable",
+    "file": "src/session.js",
+    "from": "if (err?.kind === 'aborted') notSent(T.stopped);",
+    "to": ""
+  },
+  {
+    "name": "r2 A9: reconnection retries a refused device",
+    "file": "src/app.js",
+    "from": "if (existing.state === 'refused' && !this.isRefused(existing)) {",
+    "to": "if (existing.state === 'refused') {"
+  },
+  {
+    "name": "r2 A10: unknown relay type accepted",
+    "file": "src/session.js",
+    "from": "if (relay?.mode !== 0 || (relay.type !== 0 && relay.type !== 1)) notSent(T.modeUnknown);",
+    "to": "if (relay?.mode !== 0) notSent(T.modeUnknown);"
+  },
+  {
+    "name": "r2 m1: credential words as substrings",
+    "file": "src/session.js",
+    "from": "/\\b(?:pin|",
+    "to": "/(?:pin|"
   }
 ]

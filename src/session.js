@@ -43,7 +43,10 @@ import { T } from './i18n.js';
 class Skip extends Error {}
 
 /** The door log methods that name a person at the door. */
-const CREDENTIAL = /pin|card|face|finger|qr|code|nfc|ble|bluetooth|plate|license|id ?card|rf/i;
+// Whole words only ("Interface" or "Cable" is no credential); to complete once
+// the methods of a real device's log are known.
+export const CREDENTIAL =
+  /\b(?:pin|card|rfid|rf|face|finger|fingerprint|qr|code|nfc|ble|bluetooth|plate|license|password|temp ?key|key)\b/i;
 
 /** A command refused or failed: its text for the status, its message for Gladys. */
 export class CommandError extends Error {
@@ -410,8 +413,11 @@ export class Session {
    */
   consumeOwnOpen(entry) {
     if (CREDENTIAL.test(entry.method)) return false;
+    const mono = this.mono;
     const index = this.ownOpens.findIndex(
-      (o) => !entry.relay || entry.relay.includes(String(relayNumber(o.letter))),
+      (o) =>
+        mono - o.at <= this.app.timings.ownOpenMax &&
+        (!entry.relay || entry.relay.includes(String(relayNumber(o.letter)))),
     );
     if (index === -1) return false;
     this.ownOpens.splice(index, 1);

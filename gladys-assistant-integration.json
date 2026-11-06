@@ -6,8 +6,8 @@
     "en": "Akuvox door phones and access controls, locally: relays, door and call events.",
     "fr": "Interphones et contrôles d'accès Akuvox, en local : relais, ouvertures et appels."
   },
-  "version": "0.1.0",
-  "docker_image": "ghcr.io/lm1lc3n7/gladys-akuvox:0.1.0",
+  "version": "0.1.1",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-akuvox:0.1.1",
   "gladys_version": ">=5.1.0",
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-akuvox/main/cover.png",
   "categories": ["security"],

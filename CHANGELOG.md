@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-06
+
 ### Added
 
 - First version: Akuvox door phones and access controllers over their local
@@ -20,3 +22,6 @@ the notes of the version's GitHub Release.
   log (call).
 - Refused credentials kept in `/data` (a salted 8-bit fingerprint) so a device
   is not asked again in a loop; lifted by new credentials or the test button.
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-akuvox/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-akuvox/releases/tag/v0.1.1

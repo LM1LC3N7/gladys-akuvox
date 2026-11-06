@@ -1,6 +1,6 @@
 {
   "name": "gladys-akuvox",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Gladys Assistant external integration for Akuvox door phones and access controllers (door relays, door and call logs), over their local HTTP API. Unofficial, not affiliated with Akuvox.",
   "type": "module",
